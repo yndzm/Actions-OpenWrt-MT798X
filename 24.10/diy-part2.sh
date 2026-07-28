@@ -142,3 +142,15 @@ echo "✅ 网络优化参数已写入"
 sed -i 's/192.168.6.1/192.168.30.1/g' package/base-files/files/bin/config_generate
 
 echo "✅ SSH2 配置完成。"
+
+# 强制开启内核 BTF 和 eBPF 支持（给 dae / daed 使用）
+cat <<EOF >> .config
+CONFIG_KERNEL_DEBUG_KERNEL=y
+CONFIG_KERNEL_DEBUG_INFO=y
+CONFIG_KERNEL_DEBUG_INFO_REDUCED=n
+CONFIG_KERNEL_DEBUG_INFO_BTF=y
+CONFIG_KERNEL_BPF_EVENTS=y
+CONFIG_BPF_SYSCALL=y
+CONFIG_BPF_JIT=y
+CONFIG_NET_ACT_BPF=y
+EOF
