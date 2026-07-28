@@ -144,7 +144,7 @@ sed -i 's/192.168.6.1/192.168.2.1/g' package/base-files/files/bin/config_generat
 echo "✅ SSH2 配置完成。"
 
 # ---------------------------------------------------------
-# 强制给 Filogic (6.6 内核) 开启完整的 eBPF & BTF 支持
+# 1. 给 Filogic (6.6 内核) 源码配置文件强行注入 BTF (不受 .config 覆盖影响)
 # ---------------------------------------------------------
 find target/linux/mediatek/ -name "config-6.6" | while read -r kernel_config; do
     echo ">>> 正在完全修正 BTF 内核参数: $kernel_config"
@@ -171,14 +171,6 @@ CONFIG_CGROUP_BPF=y
 EOF
 done
 
-# 追加 OpenWrt 顶层 `.config` 依赖
-cat <<EOF >> .config
-CONFIG_KERNEL_DEBUG_KERNEL=y
-CONFIG_KERNEL_DEBUG_INFO=y
-CONFIG_KERNEL_DEBUG_INFO_REDUCED=n
-CONFIG_KERNEL_DEBUG_INFO_BTF=y
-CONFIG_KERNEL_BPF_EVENTS=y
-EOF
-
-# 强行刷新配置
-make defconfig
+# ---------------------------------------------------------
+# 2. 删掉 diy-part2.sh 里的 make defconfig，并将关键包名追加到 DIY_P3_SH 或配置文件末尾
+# ---------------------------------------------------------
