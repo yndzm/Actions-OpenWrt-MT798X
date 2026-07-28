@@ -144,22 +144,34 @@ sed -i 's/192.168.6.1/192.168.2.1/g' package/base-files/files/bin/config_generat
 echo "✅ SSH2 配置完成。"
 
 # ---------------------------------------------------------
-# 强制给 MT7981 / Filogic 内核开启 BTF 与 eBPF 支持
+# 强制给 Filogic (6.6 内核) 开启完整的 eBPF & BTF 支持
 # ---------------------------------------------------------
-# 1. 直接修改 MediaTek target 的内核 6.6 配置文件（最保险，不会被 make defconfig 抹除）
 find target/linux/mediatek/ -name "config-6.6" | while read -r kernel_config; do
-    echo "正在注入 BTF/BPF 配置到: $kernel_config"
+    echo ">>> 正在完全修正 BTF 内核参数: $kernel_config"
+    
+    # 清理可能冲突的旧选项
+    sed -i '/CONFIG_DEBUG_INFO/d' "$kernel_config"
+    sed -i '/CONFIG_BPF/d' "$kernel_config"
+    
+    # 注入全套原生内核 BTF 配置
     cat <<EOF >> "$kernel_config"
+CONFIG_DEBUG_KERNEL=y
 CONFIG_DEBUG_INFO=y
 CONFIG_DEBUG_INFO_BTF=y
+# CONFIG_DEBUG_INFO_REDUCED is not set
+# CONFIG_DEBUG_INFO_COMPRESSED is not set
+CONFIG_BPF=y
 CONFIG_BPF_SYSCALL=y
 CONFIG_BPF_JIT=y
-CONFIG_NET_ACT_BPF=y
+CONFIG_BPF_JIT_ALWAYS_ON=y
 CONFIG_BPF_EVENTS=y
+CONFIG_NET_ACT_BPF=y
+CONFIG_NET_CLS_ACT=y
+CONFIG_CGROUP_BPF=y
 EOF
 done
 
-# 2. 追加 OpenWrt 顶层配置（确保构建系统开启 DEBUG 依赖）
+# 追加 OpenWrt 顶层 `.config` 依赖
 cat <<EOF >> .config
 CONFIG_KERNEL_DEBUG_KERNEL=y
 CONFIG_KERNEL_DEBUG_INFO=y
@@ -167,3 +179,6 @@ CONFIG_KERNEL_DEBUG_INFO_REDUCED=n
 CONFIG_KERNEL_DEBUG_INFO_BTF=y
 CONFIG_KERNEL_BPF_EVENTS=y
 EOF
+
+# 强行刷新配置
+make defconfig
