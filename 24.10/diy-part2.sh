@@ -10,6 +10,31 @@ echo "执行自定义优化脚本 (diy-part2.sh)"
 echo "=========================================="
 
 # ---------------------------------------------------------
+# 双重保险：终结 OpenClash 带来的 Rust 漫长编译噩梦
+# ---------------------------------------------------------
+echo ">>> 开始执行双重拦截：关闭 Ruby YJIT，跳过 rust/host 编译..."
+
+# 方案 A：从配置文件强制取消 YJIT 编译
+for conf in .config *.config; do
+    if [ -f "$conf" ]; then
+        sed -i '/CONFIG_RUBY_ENABLE_YJIT/d' "$conf"
+        echo "# CONFIG_RUBY_ENABLE_YJIT is not set" >> "$conf"
+        echo "✅ 方案 A 成功：已在 $conf 中强制声明关闭 RUBY_ENABLE_YJIT"
+    fi
+done
+
+# 方案 B：修改底层 Makefile，物理斩断 Rust 依赖
+RUBY_MK=$(find feeds -name "Makefile" -path "*/lang/ruby/Makefile" 2>/dev/null | head -n 1)
+if [ -f "$RUBY_MK" ]; then
+    echo ">>> 正在魔改 Ruby Makefile，执行物理级依赖阉割..."
+    sed -i '/config RUBY_ENABLE_YJIT/,/help/{s/default y.*/default n/g}' "$RUBY_MK"
+    sed -i 's/RUBY_ENABLE_YJIT:rust\/host//g' "$RUBY_MK" 2>/dev/null || true
+    echo "✅ 方案 B 成功：Ruby 对 Rust 的依赖链已被彻底斩断！"
+else
+    echo "⚠️ 警告: 未找到 Ruby 的 Makefile，方案 B 跳过。"
+fi
+
+# ---------------------------------------------------------
 # 0. kenzok8/openwrt-daede 专项拉取与版本升级 (至 1.28.0)
 # ---------------------------------------------------------
 echo ">>> 正在处理 kenzok8/openwrt-daede 插件..."
@@ -102,7 +127,7 @@ net.ipv4.tcp_keepalive_intvl=15[cite: 2]
 net.ipv4.tcp_keepalive_probes=5[cite: 2]
 net.ipv4.tcp_max_tw_buckets=8192[cite: 2]
 net.core.rmem_max=4194304[cite: 2]
-net.wmem_max=4194304[cite: 2]
+net.core.wmem_max=4194304
 net.ipv4.tcp_rmem=4096 131072 4194304[cite: 2]
 net.ipv4.tcp_wmem=4096 65536 4194304[cite: 2]
 net.ipv4.udp_mem=8192 12288 16384[cite: 2]
