@@ -47,8 +47,17 @@ git clone --depth=1 https://github.com/QiuSimons/vmlinux-btf.git package/custom/
 git clone --depth=1 https://github.com/fw876/helloworld.git package/custom/ssrp
 
 # 功能插件
-git clone --depth=1 https://github.com/linkease/nas-packages.git package/custom/nas-packages
-git clone --depth=1 https://github.com/linkease/nas-packages-luci.git package/custom/nas-packages-luci
+# 精简拉取 quickstart，避免全量仓库引入多余冲突包
+git clone --depth=1 https://github.com/linkease/nas-packages.git /tmp/nas-packages
+git clone --depth=1 https://github.com/linkease/nas-packages-luci.git /tmp/nas-packages-luci
+
+mkdir -p package/custom/quickstart
+# 仅复制 quickstart 核心与 luci 部分
+cp -r /tmp/nas-packages/network/services/quickstart package/custom/quickstart/ 2>/dev/null || cp -r /tmp/nas-packages/*quickstart* package/custom/quickstart/ 2>/dev/null
+cp -r /tmp/nas-packages-luci/luci/luci-app-quickstart package/custom/quickstart/ 2>/dev/null || cp -r /tmp/nas-packages-luci/*quickstart* package/custom/quickstart/ 2>/dev/null
+
+rm -rf /tmp/nas-packages /tmp/nas-packages-luci
+
 git clone --depth=1 https://github.com/sirpdboy/luci-app-poweroffdevice.git package/custom/poweroffdevice
 git clone --depth=1 https://github.com/isalikai/luci-app-owq-wol.git package/custom/owq-wol
 git clone --depth=1 https://github.com/gdy666/luci-app-lucky.git package/custom/lucky
