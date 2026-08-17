@@ -47,6 +47,8 @@ git clone --depth=1 https://github.com/QiuSimons/vmlinux-btf.git package/custom/
 git clone --depth=1 https://github.com/fw876/helloworld.git package/custom/ssrp
 
 # 功能插件
+git clone --depth=1 https://github.com/linkease/nas-packages.git package/custom/nas-packages
+git clone --depth=1 https://github.com/linkease/nas-packages-luci.git package/custom/nas-packages-luci
 git clone --depth=1 https://github.com/sirpdboy/luci-app-poweroffdevice.git package/custom/poweroffdevice
 git clone --depth=1 https://github.com/isalikai/luci-app-owq-wol.git package/custom/owq-wol
 git clone --depth=1 https://github.com/gdy666/luci-app-lucky.git package/custom/lucky
