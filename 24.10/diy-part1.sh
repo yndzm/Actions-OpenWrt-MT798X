@@ -47,16 +47,11 @@ git clone --depth=1 https://github.com/QiuSimons/vmlinux-btf.git package/custom/
 git clone --depth=1 https://github.com/fw876/helloworld.git package/custom/ssrp
 
 # 功能插件
-# 精简拉取 quickstart，避免全量仓库引入多余冲突包
-git clone --depth=1 https://github.com/linkease/nas-packages.git /tmp/nas-packages
-git clone --depth=1 https://github.com/linkease/nas-packages-luci.git /tmp/nas-packages-luci
+m -rf package/custom/*quickstart* package/custom/nas-packages*
 
-mkdir -p package/custom/quickstart
-# 仅复制 quickstart 核心与 luci 部分
-cp -r /tmp/nas-packages/network/services/quickstart package/custom/quickstart/ 2>/dev/null || cp -r /tmp/nas-packages/*quickstart* package/custom/quickstart/ 2>/dev/null
-cp -r /tmp/nas-packages-luci/luci/luci-app-quickstart package/custom/quickstart/ 2>/dev/null || cp -r /tmp/nas-packages-luci/*quickstart* package/custom/quickstart/ 2>/dev/null
-
-rm -rf /tmp/nas-packages /tmp/nas-packages-luci
+# 2. 引入官方完整 feed
+echo 'src-git nas https://github.com/linkease/nas-packages.git;master' >> feeds.conf.default
+echo 'src-git nas_luci https://github.com/linkease/nas-packages-luci.git;main' >> feeds.conf.default
 
 git clone --depth=1 https://github.com/sirpdboy/luci-app-poweroffdevice.git package/custom/poweroffdevice
 git clone --depth=1 https://github.com/isalikai/luci-app-owq-wol.git package/custom/owq-wol
