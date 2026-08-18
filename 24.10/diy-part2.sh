@@ -157,6 +157,54 @@ EOF
 done
 
 # ---------------------------------------------------------
+# QuickStart 专项解耦：剔除 mdadm 与 smartmontools 强制依赖
+# ---------------------------------------------------------
+echo ">>> 正在为 luci-app-quickstart 执行依赖解耦..."
+QS_MK=$(find -L package/ feeds/ -maxdepth 5 -path "*/luci-app-quickstart/Makefile" -type f 2>/dev/null | head -n 1)
+
+if [ -n "$QS_MK" ] && [ -f "$QS_MK" ]; then
+    echo "✅ 找到 QuickStart Makefile: $QS_MK，正在移除 RAID/SMART 强依赖..."
+    sed -i 's/+mdadm//g' "$QS_MK"
+    sed -i 's/+smartmontools//g' "$QS_MK"
+    echo "✅ QuickStart 依赖剔除完成！"
+else
+    echo "⚠️ 警告: 未找到 luci-app-quickstart 的 Makefile，跳过解耦。"
+fi
+
+# ---------------------------------------------------------
+# 追加自定义 .config 参数并刷新依赖
+# ---------------------------------------------------------
+echo ">>> 正在追加自定义 .config 配置..."
+cat <<EOF >> .config
+# 开启 kenzok8/openwrt-daede (luci-app-daede) 及相关依赖
+CONFIG_PACKAGE_luci-app-daede=y
+CONFIG_PACKAGE_daed=y
+CONFIG_PACKAGE_vmlinux-btf=y
+
+# 开启 QuickStart 及 iStore 商店（已解耦 mdadm/smartmontools）
+CONFIG_PACKAGE_quickstart=y
+CONFIG_PACKAGE_luci-app-quickstart=y
+CONFIG_PACKAGE_luci-i18n-quickstart-zh-cn=y
+CONFIG_PACKAGE_luci-app-store=y
+CONFIG_PACKAGE_luci-i18n-store-zh-cn=y
+
+# 开启内核 BTF 顶层编译依赖
+CONFIG_KERNEL_DEBUG_KERNEL=y
+CONFIG_KERNEL_DEBUG_INFO=y
+CONFIG_KERNEL_DEBUG_INFO_REDUCED=n
+CONFIG_KERNEL_DEBUG_INFO_BTF=y
+CONFIG_KERNEL_BPF_EVENTS=y
+
+# 禁用 Ruby YJIT
+# CONFIG_RUBY_ENABLE_YJIT is not set
+EOF
+
+echo "✅ 所有自定义 .config 配置已强行追加完成"
+
+# 刷新并补全依赖规则
+make defconfig
+
+# ---------------------------------------------------------
 # 追加自定义 .config 参数并刷新依赖
 # ---------------------------------------------------------
 echo ">>> 正在追加自定义 .config 配置..."
