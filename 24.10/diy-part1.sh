@@ -28,7 +28,7 @@ find package/custom/passwall-packages/ -type d -name "*mihomo*" 2>/dev/null | xa
 git clone --depth=1 https://github.com/rufengsuixing/luci-app-adguardhome.git package/custom/luci-app-adguardhome
 
 # Nikki / Momo
-git clone --depth=1 https://github.com/nikkinikki-org/OpenWrt-nikki.git package/custom/nikki
+# git clone --depth=1 https://github.com/nikkinikki-org/OpenWrt-nikki.git package/custom/nikki
 git clone --depth=1 https://github.com/nikkinikki-org/OpenWrt-momo.git package/custom/momo
 
 # SSR+
