@@ -41,7 +41,7 @@ else
 fi
 
 # ---------------------------------------------------------
-# 3. kenzok8/openwrt-daede 专项拉取与版本升级 (至 1.28.0)
+# 3. kenzok8/openwrt-daede 专项处理 (使用仓库稳定默认版本)
 # ---------------------------------------------------------
 echo ">>> 正在处理 kenzok8/openwrt-daede 插件..."
 
@@ -57,13 +57,13 @@ if [ ! -d "package/openwrt-daede" ] && [ ! -d "package/custom/luci-app-daede" ];
     git clone --depth 1 https://github.com/kenzok8/openwrt-daede.git package/openwrt-daede
 fi
 
-DAED_MAKEFILE=$(find -L package/ feeds/ -maxdepth 5 -path "*/daed*/Makefile" -type f 2>/dev/null | head -n 1)
-if [ -n "$DAED_MAKEFILE" ] && [ -f "$DAED_MAKEFILE" ]; then
-    echo "✅ 找到 Makefile: $DAED_MAKEFILE，正在强制升级至 1.28.0"
-    sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=1.28.0/' "$DAED_MAKEFILE"
-    sed -i 's/PKG_SOURCE_VERSION:=.*/PKG_SOURCE_VERSION:=v1.28.0/' "$DAED_MAKEFILE"
-    sed -i 's/PKG_HASH:=.*/PKG_HASH:=skip/' "$DAED_MAKEFILE"
-fi
+# 核心防护：全面清洗所有可能触发 Go 崩溃的 unknown GOEXPERIMENT simd 字段
+echo ">>> 正在过滤并清理 daed 中的非法 GOEXPERIMENT simd 依赖参数..."
+find package/openwrt-daede/ -type f \( -name "Makefile*" -o -name "*.mk" -o -name "*.sh" \) 2>/dev/null | while read -r f; do
+    sed -i -E 's/GOEXPERIMENT=[^ ]*simd[^ ]*/GOEXPERIMENT=/g' "$f"
+    sed -i 's/,simd//g; s/simd,//g; s/simd//g' "$f"
+done
+echo "✅ daed 源码树准备完毕"
 
 # ---------------------------------------------------------
 # 4. libxcrypt 专项救治
@@ -102,13 +102,6 @@ if [ -n "$OPENLIST2_DIR" ]; then
     find "$OPENLIST2_DIR" -type f -exec sed -i 's|admin/services/openlist2|admin/nas/openlist2|g' {} +
     find "$OPENLIST2_DIR" -type f -exec sed -i 's/"parent": "luci.services"/"parent": "luci.nas"/g' {} +
     echo "✅ OpenList2 菜单已移动到 NAS"
-fi
-
-# 修复 Rust 本地编译 LLVM
-RUST_FILE=$(find feeds package -name "Makefile" -path "*/lang/rust/Makefile" 2>/dev/null | head -n 1)
-if [ -n "$RUST_FILE" ] && [ -f "$RUST_FILE" ]; then
-    sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$RUST_FILE"
-    echo "✅ Rust 已设置为本地编译 LLVM"
 fi
 
 # ---------------------------------------------------------
@@ -165,7 +158,7 @@ EOF
 done
 
 # ---------------------------------------------------------
-# 9. 追加自定义 .config 参数并单次刷新依赖
+# 8. 追加自定义 .config 参数并单次刷新依赖
 # ---------------------------------------------------------
 echo ">>> 正在追加自定义 .config 配置..."
 cat <<EOF >> .config
