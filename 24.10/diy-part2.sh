@@ -190,15 +190,19 @@ CONFIG_PACKAGE_luci-app-daede=y
 CONFIG_PACKAGE_daed=y
 CONFIG_PACKAGE_vmlinux-btf=y
 
-# 开启 QuickStart 及 iStore 商店组件
+# 开启 QuickStart（易有云首页）及支持库
 CONFIG_PACKAGE_quickstart=y
 CONFIG_PACKAGE_luci-app-quickstart=y
 CONFIG_PACKAGE_luci-i18n-quickstart-zh-cn=y
+CONFIG_PACKAGE_luci-lib-iform=y
+
+# 开启 iStore 商店（核心守护进程 + Web 界面）
+CONFIG_PACKAGE_istore=y
 CONFIG_PACKAGE_luci-app-store=y
 CONFIG_PACKAGE_luci-i18n-store-zh-cn=y
+
+# 开启 taskd 异步任务调度服务
 CONFIG_PACKAGE_taskd=y
-CONFIG_PACKAGE_luci-lib-taskd=y
-CONFIG_PACKAGE_luci-lib-iform=y
 CONFIG_PACKAGE_luci-lib-taskd=y
 
 # 开启内核 BTF 顶层编译依赖
