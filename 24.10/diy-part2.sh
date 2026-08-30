@@ -9,11 +9,19 @@ echo "执行自定义优化脚本 (diy-part2.sh)"
 echo "=========================================="
 
 # ---------------------------------------------------------
-# 双重保险：终结 OpenClash 带来的 Rust 漫长编译噩梦
+# 1. 解决 mihomo 递归依赖死锁 (recursive dependency detected)
+# ---------------------------------------------------------
+echo ">>> 正在排查并清理 mihomo 循环依赖包..."
+find package/ feeds/ -type d -name "*mihomo*" 2>/dev/null | grep -E 'alpha|meta' | xargs rm -rf 2>/dev/null || true
+
+# 清理遗留的不完整老版 luci-app-dae (避免 dae-geoip/geosite 警告)
+find feeds/ package/ -type d -name "luci-app-dae" 2>/dev/null | xargs rm -rf 2>/dev/null || true
+
+# ---------------------------------------------------------
+# 2. 双重拦截：关闭 Ruby YJIT，跳过 rust/host 漫长编译
 # ---------------------------------------------------------
 echo ">>> 开始执行双重拦截：关闭 Ruby YJIT，跳过 rust/host 编译..."
 
-# 方案 A：从配置文件强制取消 YJIT 编译
 for conf in .config *.config; do
     if [ -f "$conf" ]; then
         sed -i '/CONFIG_RUBY_ENABLE_YJIT/d' "$conf"
@@ -22,8 +30,7 @@ for conf in .config *.config; do
     fi
 done
 
-# 方案 B：修改底层 Makefile，物理斩断 Rust 依赖
-RUBY_MK=$(find feeds -name "Makefile" -path "*/lang/ruby/Makefile" 2>/dev/null | head -n 1)
+RUBY_MK=$(find feeds package -name "Makefile" -path "*/lang/ruby/Makefile" 2>/dev/null | head -n 1)
 if [ -f "$RUBY_MK" ]; then
     echo ">>> 正在魔改 Ruby Makefile，执行物理级依赖阉割..."
     sed -i '/config RUBY_ENABLE_YJIT/,/help/{s/default y.*/default n/g}' "$RUBY_MK"
@@ -34,11 +41,10 @@ else
 fi
 
 # ---------------------------------------------------------
-# 0. kenzok8/openwrt-daede 专项拉取与版本升级 (至 1.28.0)
+# 3. kenzok8/openwrt-daede 专项拉取与版本升级 (至 1.28.0)
 # ---------------------------------------------------------
 echo ">>> 正在处理 kenzok8/openwrt-daede 插件..."
 
-# 清理旧的 daed 冲突包
 rm -rf feeds/packages/net/daed
 rm -rf feeds/luci/applications/luci-app-daed
 rm -rf package/feeds/packages/daed
@@ -46,15 +52,12 @@ rm -rf package/feeds/luci/luci-app-daed
 rm -rf package/daed
 rm -rf package/luci-app-daed
 
-# 如果 package/ 目录下还没有 openwrt-daede，直接克隆 kenzok8 的仓库
-if [ ! -d "package/openwrt-daede" ] && [ ! -d "package/luci-app-daede" ]; then
+if [ ! -d "package/openwrt-daede" ] && [ ! -d "package/custom/luci-app-daede" ]; then
     echo ">>> 克隆 kenzok8/openwrt-daede 到 package/openwrt-daede..."
     git clone --depth 1 https://github.com/kenzok8/openwrt-daede.git package/openwrt-daede
 fi
 
-# 寻找真实存在的 Makefile (加入 -L 排除死链)
 DAED_MAKEFILE=$(find -L package/ feeds/ -maxdepth 5 -path "*/daed*/Makefile" -type f 2>/dev/null | head -n 1)
-
 if [ -n "$DAED_MAKEFILE" ] && [ -f "$DAED_MAKEFILE" ]; then
     echo "✅ 找到 Makefile: $DAED_MAKEFILE，正在强制升级至 1.28.0"
     sed -i 's/PKG_VERSION:=.*/PKG_VERSION:=1.28.0/' "$DAED_MAKEFILE"
@@ -63,17 +66,20 @@ if [ -n "$DAED_MAKEFILE" ] && [ -f "$DAED_MAKEFILE" ]; then
 fi
 
 # ---------------------------------------------------------
-# libxcrypt 专项救治 (极致精简版)
+# 4. libxcrypt 专项救治
 # ---------------------------------------------------------
-XCRYPT_MK="feeds/packages/libs/libxcrypt/Makefile"
-if [ -f "$XCRYPT_MK" ]; then
+XCRYPT_MK=$(find feeds package -name "Makefile" -path "*/libxcrypt/Makefile" 2>/dev/null | head -n 1)
+if [ -n "$XCRYPT_MK" ] && [ -f "$XCRYPT_MK" ]; then
     echo ">>> 正在硬化 libxcrypt 编译参数..."
     sed -i 's/CONFIGURE_ARGS[ \t]*+=[ \t]*/&--disable-werror /' "$XCRYPT_MK"
     sed -i 's/TARGET_CFLAGS[ \t]*+=[ \t]*/&-fcommon /' "$XCRYPT_MK"
     echo "✅ libxcrypt 参数注入完成。"
 fi
 
-# 5.1 Tailscale -> VPN 
+# ---------------------------------------------------------
+# 5. 菜单归类调整
+# ---------------------------------------------------------
+# 5.1 Tailscale -> VPN
 TS_DIR=$(find feeds package -type d -name "luci-app-tailscale-community" 2>/dev/null | head -n 1)
 if [ -n "$TS_DIR" ]; then
     echo ">>> 发现 Tailscale 插件目录: $TS_DIR"
@@ -83,7 +89,7 @@ if [ -n "$TS_DIR" ]; then
 fi
 
 # 5.2 KSMBD -> NAS
-KSMBD_DIR=$(find feeds/luci -type d -name "luci-app-ksmbd" | head -n 1)
+KSMBD_DIR=$(find feeds package -type d -name "luci-app-ksmbd" 2>/dev/null | head -n 1)
 if [ -n "$KSMBD_DIR" ]; then
     find "$KSMBD_DIR" -type f -exec sed -i 's|admin/services/ksmbd|admin/nas/ksmbd|g' {} +
     find "$KSMBD_DIR" -type f -exec sed -i 's/"parent": "luci.services"/"parent": "luci.nas"/g' {} +
@@ -91,23 +97,23 @@ if [ -n "$KSMBD_DIR" ]; then
 fi
 
 # 5.3 OpenList2 -> NAS
-OPENLIST2_DIR=$(find feeds package -type d -name "luci-app-openlist2" | head -n 1)
+OPENLIST2_DIR=$(find feeds package -type d -name "luci-app-openlist2" 2>/dev/null | head -n 1)
 if [ -n "$OPENLIST2_DIR" ]; then
     find "$OPENLIST2_DIR" -type f -exec sed -i 's|admin/services/openlist2|admin/nas/openlist2|g' {} +
     find "$OPENLIST2_DIR" -type f -exec sed -i 's/"parent": "luci.services"/"parent": "luci.nas"/g' {} +
     echo "✅ OpenList2 菜单已移动到 NAS"
 fi
 
-# 修复Rust本地编译LLVM
-RUST_FILE="feeds/packages/lang/rust/Makefile"
-if [ -f "$RUST_FILE" ]; then
-  sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$RUST_FILE"
-  echo "✅ Rust 已设置为本地编译 LLVM"
+# 修复 Rust 本地编译 LLVM
+RUST_FILE=$(find feeds package -name "Makefile" -path "*/lang/rust/Makefile" 2>/dev/null | head -n 1)
+if [ -n "$RUST_FILE" ] && [ -f "$RUST_FILE" ]; then
+    sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$RUST_FILE"
+    echo "✅ Rust 已设置为本地编译 LLVM"
 fi
 
-# =========================================================
-# 网络参数优化（sysctl）
-# =========================================================
+# ---------------------------------------------------------
+# 6. 系统参数与网络优化（sysctl）
+# ---------------------------------------------------------
 mkdir -p files/etc/sysctl.d/
 cat > files/etc/sysctl.d/99-proxy-optimize.conf << 'SYSCTL'
 net.netfilter.nf_conntrack_max=32768
@@ -134,11 +140,14 @@ net.ipv4.ip_local_port_range=1024 65535
 SYSCTL
 echo "✅ 网络优化参数已写入"
 
-# 修改默认 IP (192.168.2.1)
-sed -i 's/192.168.6.1/192.168.2.1/g' package/base-files/files/bin/config_generate
+# 修改管理后台默认 IP (192.168.2.1)
+sed -i 's/192.168.1.1/192.168.2.1/g' package/base-files/files/bin/config_generate 2>/dev/null || true
+sed -i 's/192.168.6.1/192.168.2.1/g' package/base-files/files/bin/config_generate 2>/dev/null || true
 
-# Filogic (6.6 内核) 强行注入 BTF
-find target/linux/mediatek/ -name "config-6.6" | while read -r kernel_config; do
+# ---------------------------------------------------------
+# 7. Filogic (6.6 内核) 强行注入 BTF
+# ---------------------------------------------------------
+find target/linux/mediatek/ -name "config-6.6" 2>/dev/null | while read -r kernel_config; do
     sed -i '/CONFIG_DEBUG_INFO/d' "$kernel_config"
     sed -i '/CONFIG_BPF/d' "$kernel_config"
     cat <<EOF >> "$kernel_config"
@@ -157,7 +166,7 @@ EOF
 done
 
 # ---------------------------------------------------------
-# QuickStart 专项解耦：剔除 mdadm 与 smartmontools 强制依赖
+# 8. QuickStart 依赖解耦：剔除 mdadm 与 smartmontools
 # ---------------------------------------------------------
 echo ">>> 正在为 luci-app-quickstart 执行依赖解耦..."
 QS_MK=$(find -L package/ feeds/ -maxdepth 5 -path "*/luci-app-quickstart/Makefile" -type f 2>/dev/null | head -n 1)
@@ -172,7 +181,7 @@ else
 fi
 
 # ---------------------------------------------------------
-# 追加自定义 .config 参数并刷新依赖
+# 9. 追加自定义 .config 参数并单次刷新依赖
 # ---------------------------------------------------------
 echo ">>> 正在追加自定义 .config 配置..."
 cat <<EOF >> .config
@@ -181,12 +190,14 @@ CONFIG_PACKAGE_luci-app-daede=y
 CONFIG_PACKAGE_daed=y
 CONFIG_PACKAGE_vmlinux-btf=y
 
-# 开启 QuickStart 及 iStore 商店（已解耦 mdadm/smartmontools）
+# 开启 QuickStart 及 iStore 商店组件
 CONFIG_PACKAGE_quickstart=y
 CONFIG_PACKAGE_luci-app-quickstart=y
 CONFIG_PACKAGE_luci-i18n-quickstart-zh-cn=y
 CONFIG_PACKAGE_luci-app-store=y
 CONFIG_PACKAGE_luci-i18n-store-zh-cn=y
+CONFIG_PACKAGE_taskd=y
+CONFIG_PACKAGE_luci-lib-taskd=y
 
 # 开启内核 BTF 顶层编译依赖
 CONFIG_KERNEL_DEBUG_KERNEL=y
@@ -201,33 +212,7 @@ EOF
 
 echo "✅ 所有自定义 .config 配置已强行追加完成"
 
-# 刷新并补全依赖规则
-make defconfig
-
-# ---------------------------------------------------------
-# 追加自定义 .config 参数并刷新依赖
-# ---------------------------------------------------------
-echo ">>> 正在追加自定义 .config 配置..."
-cat <<EOF >> .config
-# 开启 kenzok8/openwrt-daede (luci-app-daede) 及相关依赖
-CONFIG_PACKAGE_luci-app-daede=y
-CONFIG_PACKAGE_daed=y
-CONFIG_PACKAGE_vmlinux-btf=y
-
-# 开启内核 BTF 顶层编译依赖
-CONFIG_KERNEL_DEBUG_KERNEL=y
-CONFIG_KERNEL_DEBUG_INFO=y
-CONFIG_KERNEL_DEBUG_INFO_REDUCED=n
-CONFIG_KERNEL_DEBUG_INFO_BTF=y
-CONFIG_KERNEL_BPF_EVENTS=y
-
-# 禁用 Ruby YJIT
-# CONFIG_RUBY_ENABLE_YJIT is not set
-EOF
-
-echo "✅ 所有自定义 .config 配置已强行追加完成"
-
-# 刷新并补全依赖规则
+# 刷新并生成最终依赖树
 make defconfig
 
 echo "=========================================="
