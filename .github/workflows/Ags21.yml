@@ -1,8 +1,10 @@
-name: Ags21
+name: 24.10-Ags21
 
 env:
   DEVICE_NAME: 24.10-aigo-ags21
+  # REPO_URL: https://github.com/dailook/immortalwrt-mt798x-6.6
   REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-6.6
+  # REPO_URL: https://github.com/Yuzhii0718/immortalwrt-mt798x-6.6-padavanonly
   REPO_BRANCH: openwrt-24.10-6.6
   FEEDS_CONF: feeds.conf.default
   CONFIG_FILE: 24.10/mt7981-aigo-ags21.config
@@ -27,6 +29,10 @@ on:
         required: false
         default: 'false'
 
+# =========================================================
+# 权限声明
+# 创建/上传/删除 Release、删除 workflow runs 必需
+# =========================================================
 permissions:
   contents: write
   actions: write
@@ -47,26 +53,34 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
+        # 删除大型预装软件
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
           /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/lib/jvm
         sudo docker image prune --all --force
 
+        # 配置 12GB Swap（Rust/LLVM 编译需要大量虚拟内存）
         sudo swapoff -a && sudo rm -f /mnt/swapfile
         sudo fallocate -l 12G /mnt/swapfile
         sudo chmod 600 /mnt/swapfile
         sudo mkswap /mnt/swapfile && sudo swapon /mnt/swapfile
 
+        # 系统更新
         sudo -E apt-get -yqq purge firefox snapd
         sudo -E apt-get -yqq update
         sudo -E apt-get -yqq full-upgrade
 
+        # 安装 eBPF / daed 编译依赖
         sudo -E apt-get -yqq install clang llvm dwarves build-essential \
           libssl-dev libelf-dev bc flex bison python3 xz-utils tar \
           dos2unix libfuse-dev
 
+        # 安装 ImmortalWrt 官方编译依赖
         sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+
+        # 安装 pnpm（daed 前端构建需要）
         sudo npm install -g pnpm
 
+        # 清理
         sudo -E apt-get -yqq autoremove --purge
         sudo -E apt-get -yqq clean
         sudo -E timedatectl set-timezone "$TZ"
@@ -76,6 +90,7 @@ jobs:
 
         echo "磁盘空间:"
         df -hT
+
         echo "内存/Swap:"
         free -h
 
@@ -90,7 +105,16 @@ jobs:
         ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
 
     # =========================================================
-    # 3. 加载自定义 Feeds (提前到更新 Feed 之前)
+    # 3. 更新并安装 Feeds
+    # =========================================================
+    - name: Update & install feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    # =========================================================
+    # 4. 加载自定义 Feeds
     # =========================================================
     - name: Load custom feeds (diy-part1.sh)
       run: |
@@ -100,16 +124,7 @@ jobs:
         "$GITHUB_WORKSPACE/$DIY_P1_SH"
 
     # =========================================================
-    # 4. 更新并安装 Feeds (此时包含自定义注入的源)
-    # =========================================================
-    - name: Update & install feeds
-      run: |
-        cd openwrt
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
-
-    # =========================================================
-    # 5. 加载基础配置与自定义修改 (diy-part2.sh)
+    # 5. 加载自定义配置 (diy-part2.sh)
     # =========================================================
     - name: Load custom configuration (diy-part2.sh)
       run: |
@@ -129,10 +144,11 @@ jobs:
         "$GITHUB_WORKSPACE/$DIY_DEVICE_SH"
 
     # =========================================================
-    # 5.5 执行自定义扩展脚本 (diy-part3.sh，不重复拷贝 config 避免覆盖)
+    # 5.5 加载自定义配置 (diy-part3.sh)
     # =========================================================
-    - name: Execute post-configuration (diy-part3.sh)
+    - name: Load custom configuration (diy-part3.sh)
       run: |
+        [ -e "$CONFIG_FILE" ] && cp "$CONFIG_FILE" openwrt/.config
         chmod +x "$DIY_P3_SH"
         cd openwrt
         "$GITHUB_WORKSPACE/$DIY_P3_SH"
@@ -146,9 +162,11 @@ jobs:
         cd openwrt
         make defconfig 1>/dev/null 2>&1
 
+        # 提取目标平台
         TARGET=$(grep '^CONFIG_TARGET_BOARD=' .config | cut -d'"' -f2)
         SUBTARGET=$(grep '^CONFIG_TARGET_SUBTARGET=' .config | cut -d'"' -f2)
 
+        # 基于 tools/ 和 toolchain/ 源码生成 hash
         TOOLS_HASH=$(find tools toolchain -type f \( -name "Makefile" -o -name "*.mk" \) \
           -exec md5sum {} + 2>/dev/null | sort | md5sum | cut -d' ' -f1)
 
@@ -177,6 +195,7 @@ jobs:
 
     # =========================================================
     # 5.8 恢复 Toolchain —— 第二优先: Release 备份
+    # 精确匹配当前 CACHE_KEY.tzst，避免恢复旧工具链
     # =========================================================
     - name: Restore toolchain from Release backup
       if: steps.cache-restore.outputs.cache-hit != 'true'
@@ -202,6 +221,8 @@ jobs:
           -q '.assets[].name' 2>/dev/null | grep -qx "$ASSET_NAME"; then
 
           echo "📦 从 Release 下载工具链: $ASSET_NAME"
+          echo "📍 Release 仓库: $GITHUB_REPOSITORY"
+
           gh release download toolchain-cache \
             --repo "$GITHUB_REPOSITORY" \
             -p "$ASSET_NAME" \
@@ -225,6 +246,9 @@ jobs:
 
     # =========================================================
     # 5.9 处理 Toolchain
+    # - actions/cache 命中：跳过工具链编译，不保存缓存
+    # - Release 命中：跳过工具链编译，但重新写入 actions/cache
+    # - 全部未命中：编译工具链，同时保存 actions/cache 和 Release
     # =========================================================
     - name: Handle toolchain
       id: toolchain
@@ -242,6 +266,7 @@ jobs:
 
         elif [ "$RELEASE_HIT" = "true" ]; then
           echo "✅ Release 工具链缓存命中"
+          echo "📌 将重新写入 actions/cache，加速下次构建"
           echo "need_build=false" >> "$GITHUB_OUTPUT"
           echo "need_save_cache=true" >> "$GITHUB_OUTPUT"
           echo "need_save_release=false" >> "$GITHUB_OUTPUT"
@@ -268,11 +293,14 @@ jobs:
           echo "need_save_release=true" >> "$GITHUB_OUTPUT"
         fi
 
+        # 修改 Makefile，确保后续 make 跳过工具链重编
         sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
         echo "📌 Makefile 已修改，后续编译将跳过工具链"
 
     # =========================================================
     # 5.10 保存 Toolchain 到 actions/cache
+    # - 首次编译后保存
+    # - 从 Release 恢复后也保存
     # =========================================================
     - name: Save toolchain to actions/cache
       uses: actions/cache/save@v5
@@ -285,6 +313,7 @@ jobs:
 
     # =========================================================
     # 5.11 保存 Toolchain 到 Release 备份
+    # 仅首次编译工具链时执行
     # =========================================================
     - name: Save toolchain to Release backup
       if: steps.toolchain.outputs.need_save_release == 'true'
@@ -298,8 +327,12 @@ jobs:
 
         echo "📦 打包工具链..."
         tar -I zstdmt -cf "${CACHE_KEY}.tzst" staging_dir/host* staging_dir/tool*
+        ls -lh "${CACHE_KEY}.tzst"
+
+        echo "📍 Release 目标仓库: $GITHUB_REPOSITORY"
 
         if ! gh release view toolchain-cache --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+          echo "📝 创建 toolchain-cache Release..."
           gh release create toolchain-cache \
             --repo "$GITHUB_REPOSITORY" \
             --title "Toolchain Cache" \
@@ -307,16 +340,19 @@ jobs:
             --latest=false
         fi
 
+        # 删除同平台旧缓存，避免 Release 越积越多
         gh release view toolchain-cache \
           --repo "$GITHUB_REPOSITORY" \
           --json assets \
           -q '.assets[].name' 2>/dev/null | \
           grep "^${CACHE_PREFIX}" | while read -r old_file; do
+            echo "🗑️ 删除旧缓存: $old_file"
             gh release delete-asset toolchain-cache "$old_file" \
               --repo "$GITHUB_REPOSITORY" \
               -y 2>/dev/null || true
           done
 
+        echo "📤 上传到 Release..."
         gh release upload toolchain-cache "${CACHE_KEY}.tzst" \
           --repo "$GITHUB_REPOSITORY" \
           --clobber
@@ -350,6 +386,7 @@ jobs:
       id: compile
       run: |
         cd openwrt
+
         echo "开始编译... ($(nproc) 线程)"
         df -hT /
 
@@ -363,6 +400,12 @@ jobs:
           echo "编译失败"
           exit 1
         fi
+
+        echo "========================================"
+        echo "固件编译完成"
+        echo "最终磁盘空间:"
+        df -hT /
+        echo "========================================"
 
         echo "status=success" >> "$GITHUB_OUTPUT"
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> "$GITHUB_ENV"
@@ -468,6 +511,8 @@ jobs:
 
     # =========================================================
     # 14. 清理旧的 Release 发布
+    # delete_tag_pattern 只删本设备固件 Release
+    # 不会误删 toolchain-cache
     # =========================================================
     - name: Remove old releases
       uses: dev-drprasad/delete-older-releases@v0.3.4
