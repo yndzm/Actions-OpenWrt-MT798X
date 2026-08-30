@@ -198,6 +198,8 @@ CONFIG_PACKAGE_luci-app-store=y
 CONFIG_PACKAGE_luci-i18n-store-zh-cn=y
 CONFIG_PACKAGE_taskd=y
 CONFIG_PACKAGE_luci-lib-taskd=y
+CONFIG_PACKAGE_luci-lib-iform=y
+CONFIG_PACKAGE_luci-lib-taskd=y
 
 # 开启内核 BTF 顶层编译依赖
 CONFIG_KERNEL_DEBUG_KERNEL=y
