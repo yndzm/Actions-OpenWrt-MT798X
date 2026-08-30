@@ -11,8 +11,8 @@ echo "=========================================="
 # ---------------------------------------------------------
 # 1. 解决 mihomo 递归依赖死锁 (recursive dependency detected)
 # ---------------------------------------------------------
-echo ">>> 正在排查并清理 mihomo 循环依赖包..."
-find package/ feeds/ -type d -name "*mihomo*" 2>/dev/null | grep -E 'alpha|meta' | xargs rm -rf 2>/dev/null || true
+# echo ">>> 正在排查并清理 mihomo 循环依赖包..."
+# find package/ feeds/ -type d -name "*mihomo*" 2>/dev/null | grep -E 'alpha|meta' | xargs rm -rf 2>/dev/null || true
 
 # 清理遗留的不完整老版 luci-app-dae (避免 dae-geoip/geosite 警告)
 find feeds/ package/ -type d -name "luci-app-dae" 2>/dev/null | xargs rm -rf 2>/dev/null || true
