@@ -19,7 +19,7 @@ mkdir -p package/custom
 # git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall2.git package/custom/passwall2
 
 # 解决 mihomo-alpha / mihomo-meta 递归依赖死锁 (recursive dependency detected)
-find package/custom/passwall-packages/ -type d -name "*mihomo*" 2>/dev/null | xargs rm -rf 2>/dev/null || true
+# find package/custom/passwall-packages/ -type d -name "*mihomo*" 2>/dev/null | xargs rm -rf 2>/dev/null || true
 
 # OpenClash
 # git clone --depth=1 -b dev https://github.com/vernesong/OpenClash.git package/custom/openclash
@@ -42,14 +42,14 @@ git clone --depth=1 https://github.com/QiuSimons/vmlinux-btf.git package/custom/
 
 # ================= iStoreOS / LinkEase 套件依赖修复 =================
 # 1. 添加官方 feed
-sed -i '/nas/d' feeds.conf.default
-sed -i '/nas_luci/d' feeds.conf.default
-echo 'src-git nas https://github.com/linkease/nas-packages.git;master' >> feeds.conf.default
-echo 'src-git nas_luci https://github.com/linkease/nas-packages-luci.git;main' >> feeds.conf.default
+# sed -i '/nas/d' feeds.conf.default
+# sed -i '/nas_luci/d' feeds.conf.default
+# echo 'src-git nas https://github.com/linkease/nas-packages.git;master' >> feeds.conf.default
+# echo 'src-git nas_luci https://github.com/linkease/nas-packages-luci.git;main' >> feeds.conf.default
 
 # 2. 独立拉取核心依赖包，彻底解决 No feed for package 'luci-app-store' / 'luci-lib-taskd'
-git clone --depth=1 https://github.com/linkease/istore.git package/custom/istore
-git clone --depth=1 https://github.com/linkease/openwrt-taskd.git package/custom/taskd
+# git clone --depth=1 https://github.com/linkease/istore.git package/custom/istore
+# git clone --depth=1 https://github.com/linkease/openwrt-taskd.git package/custom/taskd
 
 # ================= 功能插件 =================
 # git clone --depth=1 https://github.com/sirpdboy/luci-app-poweroffdevice.git package/custom/poweroffdevice
