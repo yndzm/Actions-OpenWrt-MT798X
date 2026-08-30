@@ -47,7 +47,7 @@ git clone --depth=1 https://github.com/QiuSimons/vmlinux-btf.git package/custom/
 git clone --depth=1 https://github.com/fw876/helloworld.git package/custom/ssrp
 
 # 功能插件
-m -rf package/custom/*quickstart* package/custom/nas-packages*
+rm -rf package/custom/*quickstart* package/custom/nas-packages*
 
 # 2. 引入官方完整 feed
 echo 'src-git nas https://github.com/linkease/nas-packages.git;master' >> feeds.conf.default
